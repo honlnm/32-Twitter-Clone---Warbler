@@ -4,7 +4,7 @@ from flask import Flask, render_template, request, flash, redirect, session, g
 from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
-from forms import UserAddForm, LoginForm, MessageForm
+from forms import UserAddForm, LoginForm, MessageForm, UserEditForm
 from models import db, connect_db, User, Message
 
 CURR_USER_KEY = "curr_user"
@@ -75,6 +75,7 @@ def signup():
                 email=form.email.data,
                 image_url=form.image_url.data or User.image_url.default.arg,
             )
+            db.session.add(user)
             db.session.commit()
 
         except IntegrityError:
@@ -113,7 +114,9 @@ def login():
 def logout():
     """Handle logout of user."""
 
-    # IMPLEMENT THIS
+    do_logout()
+    flash("You have been logged out")
+    return redirect('/login')
 
 
 ##############################################################################
@@ -211,7 +214,30 @@ def stop_following(follow_id):
 def profile():
     """Update profile for current user."""
 
-    # IMPLEMENT THIS
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+
+    form = UserEditForm(obj = g.user)
+
+    if form.validate_on_submit():
+        user = User.authenticate(g.user.username,
+                                 form.password.data)
+
+        if user:
+            g.user.username = form.username.data
+            g.user.email = form.email.data
+            g.user.image_url = form.image_url.data or User.image_url.default.arg
+            g.user.header_image_url = form.header_image_url.data or User.header_image_url.default.arg
+            g.user.bio = form.bio.data
+            db.session.commit()
+            flash(f"{g.user.username}'s profile has been updated!")
+            return redirect(f'/users/{g.user.id}')
+
+        flash("Invalid credentials.", 'danger')
+        return redirect('/')
+    
+    return render_template('users/edit.html', user_id=g.user.id, form=form)
 
 
 @app.route('/users/delete', methods=["POST"])
@@ -286,14 +312,15 @@ def messages_destroy(message_id):
 @app.route('/')
 def homepage():
     """Show homepage:
-
     - anon users: no messages
     - logged in: 100 most recent messages of followed_users
     """
 
     if g.user:
+        following_ids = [user.id for user in g.user.following]
         messages = (Message
                     .query
+                    .filter((Message.user_id == g.user.id) | (Message.user_id.in_(following_ids)))
                     .order_by(Message.timestamp.desc())
                     .limit(100)
                     .all())
