@@ -34,7 +34,8 @@ class Likes(db.Model):
 
     id = db.Column(
         db.Integer,
-        primary_key=True
+        primary_key=True,
+        autoincrement=True
     )
 
     user_id = db.Column(
