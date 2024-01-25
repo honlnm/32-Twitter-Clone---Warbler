@@ -18,7 +18,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = (
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ECHO'] = False
-app.config['DEBUG_TB_INTERCEPT_REDIRECTS'] = True
+app.config['DEBUG_TB_INTERCEPT_REDIRECTS'] = False
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', "it's a secret")
 toolbar = DebugToolbarExtension(app)
 
@@ -34,7 +34,7 @@ def add_user_to_g():
     """If we're logged in, add curr user to Flask global."""
 
     if CURR_USER_KEY in session:
-        g.user = User.query.get(session[CURR_USER_KEY])
+        g.user = db.session.get(User, (session[CURR_USER_KEY]))
 
     else:
         g.user = None
@@ -294,7 +294,7 @@ def messages_add():
 def messages_show(message_id):
     """Show a message."""
 
-    msg = Message.query.get(message_id)
+    msg = Message.query.get_or_404(message_id)
     return render_template('messages/show.html', message=msg)
 
 
@@ -306,13 +306,13 @@ def messages_destroy(message_id):
         flash("Access unauthorized.", "danger")
         return redirect("/")
 
-    msg = Message.query.get(message_id)
+    msg = db.session.get(Message, message_id)
     db.session.delete(msg)
     db.session.commit()
 
     return redirect(f"/users/{g.user.id}")
 
-@app.route('/users/add_like/<int:message_id>', methods=["POST"])
+@app.route('/messages/<int:message_id>/like', methods=["POST"])
 def like_message(message_id):
 
     if not g.user:
